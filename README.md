@@ -32,7 +32,7 @@ better phone
 Installation 
 
 pkg install wget -y
-```
+ ```
 
 wget https://github.com/bijoysingha/Delta.git 
 ```
