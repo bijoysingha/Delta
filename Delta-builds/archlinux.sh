@@ -1,116 +1,98 @@
-dist_name="Arch Linux"
-dist_version="2025.01.01"
+#!/data/data/com.termux/files/usr/bin/bash
 
-bootstrap_distribution() {
-	sudo rm -f "${ROOTFS_DIR}"/archlinux-*.tar.xz
+# Install required packages
+apt install proot proot-distro bsdtar axel neofetch -y
+clear
 
-	for arch in aarch64 armv7; do
-		curl --fail --location \
-			--output "${WORKDIR}/archlinux-${arch}.tar.gz" \
-			"http://os.archlinuxarm.org/os/ArchLinuxARM-${arch}-latest.tar.gz"
+# Read FS value
+FS=archlinux
 
-		sudo rm -rf "${WORKDIR}/archlinux-$(translate_arch "$arch")"
-		sudo mkdir -m 755 "${WORKDIR}/archlinux-$(translate_arch "$arch")"
-		sudo tar -zxp --acls --xattrs --xattrs-include='*' \
-			-f "${WORKDIR}/archlinux-${arch}.tar.gz" \
-			-C "${WORKDIR}/archlinux-$(translate_arch "$arch")"
+# Forward the value of FS to NM
+NM=$FS
 
-		cat <<- EOF | sudo unshare -mpf bash -e -
-		rm -f "${WORKDIR}/archlinux-$(translate_arch "$arch")/etc/resolv.conf"
-		echo "nameserver 1.1.1.1" > "${WORKDIR}/archlinux-$(translate_arch "$arch")/etc/resolv.conf"
-		mount --bind "${WORKDIR}/archlinux-$(translate_arch "$arch")/" "${WORKDIR}/archlinux-$(translate_arch "$arch")/"
-		mount --bind /dev "${WORKDIR}/archlinux-$(translate_arch "$arch")/dev"
-		mount --bind /proc "${WORKDIR}/archlinux-$(translate_arch "$arch")/proc"
-		mount --bind /sys "${WORKDIR}/archlinux-$(translate_arch "$arch")/sys"
-		chroot "${WORKDIR}/archlinux-$(translate_arch "$arch")" pacman-key --init
-		chroot "${WORKDIR}/archlinux-$(translate_arch "$arch")" pacman-key --populate archlinuxarm
-		if [ "$arch" = "aarch64" ]; then
-			chroot "${WORKDIR}/archlinux-$(translate_arch "$arch")" pacman -Rnsc --noconfirm linux-aarch64
-		else
-			chroot "${WORKDIR}/archlinux-$(translate_arch "$arch")" pacman -Rnsc --noconfirm linux-armv7
-		fi
-		chroot "${WORKDIR}/archlinux-$(translate_arch "$arch")" pacman -Syu --noconfirm
-		sed -i 's/#DisableSandbox/DisableSandbox/' "${WORKDIR}/archlinux-$(translate_arch "$arch")/etc/pacman.conf"
-		EOF
+# Capitalize the first letter of NM
+NM=$(echo $NM | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
 
-		sudo rm -f "${WORKDIR:?}/archlinux-$(translate_arch "$arch")"/var/cache/pacman/pkg/* || true
+# Display neofetch with custom ASCII art
+neofetch --ascii_distro $NM
 
-		archive_rootfs "${ROOTFS_DIR}/archlinux-$(translate_arch "$arch")-pd-${CURRENT_VERSION}.tar.xz" \
-			"archlinux-$(translate_arch "$arch")"
-	done
-	unset arch
+# Output the selected value
+echo "You selected $NM Linux"
+echo " "
 
-	curl --fail --location \
-		--output "${WORKDIR}/archlinux-x86_64.tar.zst" \
-		"https://mirror.rackspace.com/archlinux/iso/${dist_version}/archlinux-bootstrap-${dist_version}-x86_64.tar.zst"
+# Create necessary directories
+mkdir -p $PREFIX/var/lib/proot-distro/installed-rootfs
 
-	sudo mkdir -m 755 "${WORKDIR}/archlinux-bootstrap"
-	sudo tar -xp --strip-components=1 --acls --xattrs --xattrs-include='*' \
-		-f "${WORKDIR}/archlinux-x86_64.tar.zst" \
-		-C "${WORKDIR}/archlinux-bootstrap"
+# Change directory
+cd $PREFIX/var/lib/proot-distro/installed-rootfs/
 
-	cat <<- EOF | sudo unshare -mpf bash -e -
-	rm -f "${WORKDIR}/archlinux-bootstrap/etc/resolv.conf"
-	echo "nameserver 1.1.1.1" > "${WORKDIR}/archlinux-bootstrap/etc/resolv.conf"
-	mount --bind "${WORKDIR}/archlinux-bootstrap/" "${WORKDIR}/archlinux-bootstrap/"
-	mount --bind /dev "${WORKDIR}/archlinux-bootstrap/dev"
-	mount --bind /proc "${WORKDIR}/archlinux-bootstrap/proc"
-	mount --bind /sys "${WORKDIR}/archlinux-bootstrap/sys"
-	mkdir "${WORKDIR}/archlinux-bootstrap/archlinux-i686"
-	mkdir "${WORKDIR}/archlinux-bootstrap/archlinux-x86_64"
-	echo 'Server = http://mirror.rackspace.com/archlinux/\$repo/os/\$arch' > \
-		"${WORKDIR}/archlinux-bootstrap/etc/pacman.d/mirrorlist"
-	chroot "${WORKDIR}/archlinux-bootstrap" pacman-key --init
-	chroot "${WORKDIR}/archlinux-bootstrap" pacman-key --populate
-	chroot "${WORKDIR}/archlinux-bootstrap" pacstrap -K /archlinux-x86_64 base
-	# chroot "${WORKDIR}/archlinux-bootstrap" pacman -Scc --noconfirm
-	sed -i 's|Architecture = auto|Architecture = i686|' \
-		"${WORKDIR}/archlinux-bootstrap/etc/pacman.conf"
-	sed -i 's|Required DatabaseOptional|Never|' \
-		"${WORKDIR}/archlinux-bootstrap/etc/pacman.conf"
-	echo 'Server = https://de.mirror.archlinux32.org/\$arch/\$repo' > \
-		"${WORKDIR}/archlinux-bootstrap/etc/pacman.d/mirrorlist"
-	chroot "${WORKDIR}/archlinux-bootstrap" pacstrap -K /archlinux-i686 base
-	EOF
-	sudo mv archlinux-bootstrap/archlinux-x86_64 ./
-	sudo mv archlinux-bootstrap/archlinux-i686 ./
+# Download the rootfs using axel
+axel -a -o $FS.tar.xz https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz
 
-	for arch in i686 x86_64; do
-		sudo rm -f "${WORKDIR:?}/archlinux-bootstrap/archlinux-${arch}"/var/cache/pacman/pkg/* || true
-		sudo sed -i 's/#DisableSandbox/DisableSandbox/' "archlinux-${arch}/etc/pacman.conf"
-		archive_rootfs "${ROOTFS_DIR}/archlinux-${arch}-pd-${CURRENT_VERSION}.tar.xz" \
-			"archlinux-${arch}"
-	done
-	unset arch
-}
+# Check file integrity
+echo " "
+echo "Checking $NM Linux File Integrity...!!!"
+echo " "
+sleep 3s
+echo "MD5"
+md5sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA256"
+sha256sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA512"
+sha512sum $FS.tar.xz
+sleep 3s
 
-write_plugin() {
-	cat <<- EOF > "${PLUGIN_DIR}/archlinux.sh"
-	# This is a default distribution plug-in.
-	# Do not modify this file as your changes will be overwritten on next update.
-	# If you want customize installation, please make a copy.
-	DISTRO_NAME="Arch Linux"
-	DISTRO_COMMENT="ARM(64) devices use Arch Linux ARM, i686 uses Arch Linux 32. Both are independent projects. The original Arch usable only by x86_64 devices."
+# Extract the rootfs
+echo " "
+echo "[*] Extracting ${NM} Linux Rootfs, Please wait...!!!"
+proot --link2symlink bsdtar -xpJf $FS.tar.xz 2>/dev/null
 
-	TARBALL_URL['aarch64']="${GIT_RELEASE_URL}/archlinux-aarch64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['aarch64']="$(sha256sum "${ROOTFS_DIR}/archlinux-aarch64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['arm']="${GIT_RELEASE_URL}/archlinux-arm-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['arm']="$(sha256sum "${ROOTFS_DIR}/archlinux-arm-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['i686']="${GIT_RELEASE_URL}/archlinux-i686-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['i686']="$(sha256sum "${ROOTFS_DIR}/archlinux-i686-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['x86_64']="${GIT_RELEASE_URL}/archlinux-x86_64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['x86_64']="$(sha256sum "${ROOTFS_DIR}/archlinux-x86_64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
+# Create a proot-distro configuration file for the Kali minimal rootfs
+cat > $PREFIX/etc/proot-distro/$FS.sh << EOF
+DISTRO_NAME="$NM Linux"
+TARBALL_URL['aarch64']="https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz"
+TARBALL_SHA256['aarch64']="$(sha256sum $FS.tar.xz | awk '{print $1}')"
+EOF
 
-	distro_setup() {
-	${TAB}# Fix environment variables on login or su.
-	${TAB}local f
-	${TAB}for f in su su-l system-local-login system-remote-login; do
-	${TAB}${TAB}echo "session  required  pam_env.so readenv=1" >> ./etc/pam.d/"\${f}"
-	${TAB}done
+# Create a shortcut command to launch the distro
+cat > $PREFIX/bin/$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
 
-	${TAB}# Configure en_US.UTF-8 locale.
-	${TAB}sed -i -E 's/#[[:space:]]?(en_US.UTF-8[[:space:]]+UTF-8)/\1/g' ./etc/locale.gen
-	${TAB}run_proot_cmd locale-gen
-	}
-	EOF
-}
+proot-distro login $FS
+EOF
+chmod 700 $PREFIX/bin/$FS
+
+# Add start-up login notification
+cat >> $PREFIX/etc/bash.bashrc << EOF
+echo "Login $NM Linux: $FS"
+EOF
+
+# Add support for uninstallation
+cat > $PREFIX/bin/uninstall-$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro remove $FS
+sed -i 's/echo "Login $NM Linux: $FS"//g' $PREFIX/etc/bash.bashrc
+rm -rf $PREFIX/bin/uninstall-$FS
+rm -rf $PREFIX/bin/$FS
+rm -rf $PREFIX/var/lib/proot-distro/dlcache/$FS.tar.xz
+EOF
+chmod 700 $PREFIX/bin/uninstall-$FS
+
+# Backup tarball to the cache
+mkdir -p $PREFIX/var/lib/proot-distro/dlcache
+mv $FS.tar.xz $PREFIX/var/lib/proot-distro/dlcache
+
+# Display final instructions
+echo " "
+echo -e '\e[1;96mSuccessful Installation!'
+echo -e '\e[0m'
+cat <<- EOF
+To login $NM Linux, Type: $FS
+EOF
+sleep 15s
+echo " "
