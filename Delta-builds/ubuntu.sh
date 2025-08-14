@@ -1,65 +1,98 @@
-dist_name="Ubuntu"
+#!/data/data/com.termux/files/usr/bin/bash
 
-# Must contain current LTS version.
-# After changing, update the DISTRO_NAME below.
-dist_version="noble"
+# Install required packages
+apt install proot proot-distro bsdtar axel neofetch -y
+clear
 
-bootstrap_distribution() {
-	sudo rm -f "${ROOTFS_DIR}"/ubuntu-"${dist_version}"-*.tar.xz
+# Read FS value
+FS=ubuntu
 
-	for arch in arm64 armhf amd64; do
-		sudo rm -rf "${WORKDIR}/ubuntu-${dist_version}-$(translate_arch "$arch")"
-		sudo mmdebstrap \
-			--architectures=${arch} \
-			--variant=apt \
-			--components="main,universe,multiverse" \
-			--include="locales,passwd,software-properties-common" \
-			--format=directory \
-			"${dist_version}" \
-			"${WORKDIR}/ubuntu-${dist_version}-$(translate_arch "$arch")"
-		archive_rootfs "${ROOTFS_DIR}/ubuntu-${dist_version}-$(translate_arch "$arch")-pd-${CURRENT_VERSION}.tar.xz" \
-			"ubuntu-${dist_version}-$(translate_arch "$arch")"
-	done
-	unset arch
-}
+# Forward the value of FS to NM
+NM=$FS
 
-write_plugin() {
-	cat <<- EOF > "${PLUGIN_DIR}/ubuntu.sh"
-	# This is a default distribution plug-in.
-	# Do not modify this file as your changes will be overwritten on next update.
-	# If you want customize installation, please make a copy.
-	DISTRO_NAME="Ubuntu (24.04)"
-	DISTRO_COMMENT="LTS release (${dist_version})."
+# Capitalize the first letter of NM
+NM=$(echo $NM | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
 
-	TARBALL_URL['aarch64']="${GIT_RELEASE_URL}/ubuntu-${dist_version}-aarch64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['aarch64']="$(sha256sum "${ROOTFS_DIR}/ubuntu-${dist_version}-aarch64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['arm']="${GIT_RELEASE_URL}/ubuntu-${dist_version}-arm-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['arm']="$(sha256sum "${ROOTFS_DIR}/ubuntu-${dist_version}-arm-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['x86_64']="${GIT_RELEASE_URL}/ubuntu-${dist_version}-x86_64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['x86_64']="$(sha256sum "${ROOTFS_DIR}/ubuntu-${dist_version}-x86_64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
+# Display neofetch with custom ASCII art
+neofetch --ascii_distro $NM
 
-	distro_setup() {
-	${TAB}# Configure en_US.UTF-8 locale.
-	${TAB}sed -i -E 's/#[[:space:]]?(en_US.UTF-8[[:space:]]+UTF-8)/\1/g' ./etc/locale.gen
-	${TAB}run_proot_cmd DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales
+# Output the selected value
+echo "You selected $NM Linux"
+echo " "
 
-	${TAB}# Configure Firefox PPA.
-	${TAB}echo "Configuring PPA repository for Firefox..."
-	${TAB}run_proot_cmd add-apt-repository --yes --no-update ppa:mozillateam/firefox-next || true
-	${TAB}cat <<- CONFIG_EOF > ./etc/apt/preferences.d/pin-mozilla-ppa
-	${TAB}Package: *
-	${TAB}Pin: release o=LP-PPA-mozillateam-firefox-next
-	${TAB}Pin-Priority: 9999
-	${TAB}CONFIG_EOF
+# Create necessary directories
+mkdir -p $PREFIX/var/lib/proot-distro/installed-rootfs
 
-	${TAB}# Configure Thunderbird PPA.
-	${TAB}echo "Configuring PPA repository for Thunderbird..."
-	${TAB}run_proot_cmd add-apt-repository --yes --no-update ppa:mozillateam/thunderbird-next || true
-	${TAB}cat <<- CONFIG_EOF > ./etc/apt/preferences.d/pin-thunderbird-ppa
-	${TAB}Package: *
-	${TAB}Pin: release o=LP-PPA-mozillateam-thunderbird-next
-	${TAB}Pin-Priority: 9999
-	${TAB}CONFIG_EOF
-	}
-	EOF
-}
+# Change directory
+cd $PREFIX/var/lib/proot-distro/installed-rootfs/
+
+# Download the rootfs using axel
+axel -a -o $FS.tar.xz https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz
+
+# Check file integrity
+echo " "
+echo "Checking $NM Linux File Integrity...!!!"
+echo " "
+sleep 3s
+echo "MD5"
+md5sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA256"
+sha256sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA512"
+sha512sum $FS.tar.xz
+sleep 3s
+
+# Extract the rootfs
+echo " "
+echo "[*] Extracting ${NM} Linux Rootfs, Please wait...!!!"
+proot --link2symlink bsdtar -xpJf $FS.tar.xz 2>/dev/null
+
+# Create a proot-distro configuration file for the Kali minimal rootfs
+cat > $PREFIX/etc/proot-distro/$FS.sh << EOF
+DISTRO_NAME="$NM Linux"
+TARBALL_URL['aarch64']="https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz"
+TARBALL_SHA256['aarch64']="$(sha256sum $FS.tar.xz | awk '{print $1}')"
+EOF
+
+# Create a shortcut command to launch the distro
+cat > $PREFIX/bin/$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro login $FS
+EOF
+chmod 700 $PREFIX/bin/$FS
+
+# Add start-up login notification
+cat >> $PREFIX/etc/bash.bashrc << EOF
+echo "Login $NM Linux: $FS"
+EOF
+
+# Add support for uninstallation
+cat > $PREFIX/bin/uninstall-$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro remove $FS
+sed -i 's/echo "Login $NM Linux: $FS"//g' $PREFIX/etc/bash.bashrc
+rm -rf $PREFIX/bin/uninstall-$FS
+rm -rf $PREFIX/bin/$FS
+rm -rf $PREFIX/var/lib/proot-distro/dlcache/$FS.tar.xz
+EOF
+chmod 700 $PREFIX/bin/uninstall-$FS
+
+# Backup tarball to the cache
+mkdir -p $PREFIX/var/lib/proot-distro/dlcache
+mv $FS.tar.xz $PREFIX/var/lib/proot-distro/dlcache
+
+# Display final instructions
+echo " "
+echo -e '\e[1;96mSuccessful Installation!'
+echo -e '\e[0m'
+cat <<- EOF
+To login $NM Linux, Type: $FS
+EOF
+sleep 15s
+echo " "

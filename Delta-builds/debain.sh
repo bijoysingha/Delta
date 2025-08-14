@@ -5,7 +5,7 @@ apt install proot proot-distro bsdtar axel neofetch -y
 clear
 
 # Read FS value
-FS=chimera
+FS=debian
 
 # Forward the value of FS to NM
 NM=$FS

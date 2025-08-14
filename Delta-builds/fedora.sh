@@ -1,63 +1,98 @@
-dist_name="Fedora"
-dist_version="42-1.1"
+#!/data/data/com.termux/files/usr/bin/bash
 
-bootstrap_distribution() {
-	sudo rm -f "${ROOTFS_DIR}"/fedora-*.tar.xz
+# Install required packages
+apt install proot proot-distro bsdtar axel neofetch -y
+clear
 
-	for arch in aarch64 x86_64; do
-		curl --fail --location \
-			--output "${WORKDIR}/Fedora-Container-Base-Generic.${arch}-${dist_version}.oci.tar.xz" \
-			"https://mirror.de.leaseweb.net/fedora/linux/releases/${dist_version%%-*}/Container/${arch}/images/Fedora-Container-Base-Generic-${dist_version}.${arch}.oci.tar.xz"
-		sudo rm -rf "${WORKDIR}/fedora-tmp" "${WORKDIR}/fedora-$(translate_arch "$arch")"
-		mkdir "${WORKDIR}/fedora-tmp"
-		tar -C "${WORKDIR}/fedora-tmp" -Jxf "${WORKDIR}/Fedora-Container-Base-Generic.${arch}-${dist_version}.oci.tar.xz"
-		oci_manifest=$(jq -r '.manifests[0].digest' "${WORKDIR}/fedora-tmp"/index.json | cut -d ':' -f 2)
-		oci_layers=$(jq -r '.layers[].digest' "${WORKDIR}/fedora-tmp/blobs/sha256/${oci_manifest}" | cut -d ':' -f 2)
+# Read FS value
+FS=fedora
 
-		sudo mkdir -m 755 "${WORKDIR}/fedora-$(translate_arch "$arch")"
-		for layer in ${oci_layers}; do
-			sudo tar -zxp --acls --xattrs --xattrs-include='*' \
-				-f "${WORKDIR}/fedora-tmp/blobs/sha256/${layer}" \
-				-C "${WORKDIR}/fedora-$(translate_arch "$arch")"
-		done
-		sudo rm -rf "${WORKDIR}/fedora-tmp"
+# Forward the value of FS to NM
+NM=$FS
 
-		cat <<- EOF | sudo unshare -mpf bash -e -
-		rm -f "${WORKDIR}/fedora-$(translate_arch "$arch")/etc/resolv.conf"
-		echo "nameserver 1.1.1.1" > "${WORKDIR}/fedora-$(translate_arch "$arch")/etc/resolv.conf"
-		echo "excludepkgs=*selinux*" >> "${WORKDIR}/fedora-$(translate_arch "$arch")/etc/dnf/dnf.conf"
-		mount --bind /dev "${WORKDIR}/fedora-$(translate_arch "$arch")/dev"
-		mount --bind /proc "${WORKDIR}/fedora-$(translate_arch "$arch")/proc"
-		mount --bind /sys "${WORKDIR}/fedora-$(translate_arch "$arch")/sys"
-		chroot "${WORKDIR}/fedora-$(translate_arch "$arch")" yum upgrade -y
-		chroot "${WORKDIR}/fedora-$(translate_arch "$arch")" yum install -y passwd util-linux
-		chroot "${WORKDIR}/fedora-$(translate_arch "$arch")" yum clean all
-		chmod 4755 "${WORKDIR}/fedora-$(translate_arch "$arch")"/usr/bin/sudo
-		EOF
+# Capitalize the first letter of NM
+NM=$(echo $NM | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
 
-		archive_rootfs "${ROOTFS_DIR}/fedora-$(translate_arch "$arch")-pd-${CURRENT_VERSION}.tar.xz" \
-			"fedora-$(translate_arch "$arch")"
-	done
-	unset arch
-}
+# Display neofetch with custom ASCII art
+neofetch --ascii_distro $NM
 
-write_plugin() {
-	cat <<- EOF > "${PLUGIN_DIR}/fedora.sh"
-	# This is a default distribution plug-in.
-	# Do not modify this file as your changes will be overwritten on next update.
-	# If you want customize installation, please make a copy.
-	DISTRO_NAME="Fedora"
-	DISTRO_COMMENT="Version ${dist_version%%-*}."
+# Output the selected value
+echo "You selected $NM Linux"
+echo " "
 
-	TARBALL_URL['aarch64']="${GIT_RELEASE_URL}/fedora-aarch64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['aarch64']="$(sha256sum "${ROOTFS_DIR}/fedora-aarch64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['x86_64']="${GIT_RELEASE_URL}/fedora-x86_64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['x86_64']="$(sha256sum "${ROOTFS_DIR}/fedora-x86_64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
+# Create necessary directories
+mkdir -p $PREFIX/var/lib/proot-distro/installed-rootfs
 
-	distro_setup() {
-	${TAB}# Fix environment variables on login or su.
-	${TAB}run_proot_cmd authselect opt-out
-	${TAB}echo "session  required  pam_env.so readenv=1" >> ./etc/pam.d/system-auth
-	}
-	EOF
-}
+# Change directory
+cd $PREFIX/var/lib/proot-distro/installed-rootfs/
+
+# Download the rootfs using axel
+axel -a -o $FS.tar.xz https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz
+
+# Check file integrity
+echo " "
+echo "Checking $NM Linux File Integrity...!!!"
+echo " "
+sleep 3s
+echo "MD5"
+md5sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA256"
+sha256sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA512"
+sha512sum $FS.tar.xz
+sleep 3s
+
+# Extract the rootfs
+echo " "
+echo "[*] Extracting ${NM} Linux Rootfs, Please wait...!!!"
+proot --link2symlink bsdtar -xpJf $FS.tar.xz 2>/dev/null
+
+# Create a proot-distro configuration file for the Kali minimal rootfs
+cat > $PREFIX/etc/proot-distro/$FS.sh << EOF
+DISTRO_NAME="$NM Linux"
+TARBALL_URL['aarch64']="https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz"
+TARBALL_SHA256['aarch64']="$(sha256sum $FS.tar.xz | awk '{print $1}')"
+EOF
+
+# Create a shortcut command to launch the distro
+cat > $PREFIX/bin/$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro login $FS
+EOF
+chmod 700 $PREFIX/bin/$FS
+
+# Add start-up login notification
+cat >> $PREFIX/etc/bash.bashrc << EOF
+echo "Login $NM Linux: $FS"
+EOF
+
+# Add support for uninstallation
+cat > $PREFIX/bin/uninstall-$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro remove $FS
+sed -i 's/echo "Login $NM Linux: $FS"//g' $PREFIX/etc/bash.bashrc
+rm -rf $PREFIX/bin/uninstall-$FS
+rm -rf $PREFIX/bin/$FS
+rm -rf $PREFIX/var/lib/proot-distro/dlcache/$FS.tar.xz
+EOF
+chmod 700 $PREFIX/bin/uninstall-$FS
+
+# Backup tarball to the cache
+mkdir -p $PREFIX/var/lib/proot-distro/dlcache
+mv $FS.tar.xz $PREFIX/var/lib/proot-distro/dlcache
+
+# Display final instructions
+echo " "
+echo -e '\e[1;96mSuccessful Installation!'
+echo -e '\e[0m'
+cat <<- EOF
+To login $NM Linux, Type: $FS
+EOF
+sleep 15s
+echo " "

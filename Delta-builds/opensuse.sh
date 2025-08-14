@@ -1,77 +1,98 @@
-dist_name="openSUSE"
+#!/data/data/com.termux/files/usr/bin/bash
 
-bootstrap_distribution() {
-	sudo rm -f "${ROOTFS_DIR}"/opensuse-*.tar.xz
+# Install required packages
+apt install proot proot-distro bsdtar axel neofetch -y
+clear
 
-	opensuse_manifest=$(docker manifest inspect opensuse/tumbleweed:latest)
-	for arch in arm64 arm 386 amd64; do
-		if [ "$arch" = "arm" ]; then
-			digest=$(
-				echo "$opensuse_manifest" | \
-				jq -r ".manifests[]" | \
-				jq -r "select(.platform.architecture == \"${arch}\")" | \
-				jq -r "select(.platform.variant == \"v7\")" | \
-				jq -r ".digest"
-			)
-		else
-			digest=$(
-				echo "$opensuse_manifest" | \
-				jq -r ".manifests[]" | \
-				jq -r "select(.platform.architecture == \"${arch}\")" | \
-				jq -r ".digest"
-			)
-		fi
+# Read FS value
+FS=opensuse
 
-		docker pull "opensuse/tumbleweed@${digest}"
-		docker export --output "${WORKDIR}/opensuse-dump-${arch}.tar" \
-			$(docker create "opensuse/tumbleweed@${digest}")
+# Forward the value of FS to NM
+NM=$FS
 
-		sudo rm -rf "${WORKDIR}/opensuse-$(translate_arch "$arch")"
-		sudo mkdir -m 755 "${WORKDIR}/opensuse-$(translate_arch "$arch")"
-		sudo tar -xpf "${WORKDIR}/opensuse-dump-${arch}.tar" \
-			-C "${WORKDIR}/opensuse-$(translate_arch "$arch")"
+# Capitalize the first letter of NM
+NM=$(echo $NM | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
 
-		cat <<- EOF | sudo unshare -mpf bash -e -
-		rm -f "${WORKDIR}/opensuse-$(translate_arch "$arch")/etc/resolv.conf"
-		echo "nameserver 1.1.1.1" > "${WORKDIR}/opensuse-$(translate_arch "$arch")/etc/resolv.conf"
-		sed -i -E 's/^(rpm\.install\.excludedocs)/# \1/g' "${WORKDIR}/opensuse-$(translate_arch "$arch")/etc/zypp/zypp.conf"
-		mount --bind /dev "${WORKDIR}/opensuse-$(translate_arch "$arch")/dev"
-		mount --bind /proc "${WORKDIR}/opensuse-$(translate_arch "$arch")/proc"
-		mount --bind /sys "${WORKDIR}/opensuse-$(translate_arch "$arch")/sys"
-		chroot "${WORKDIR}/opensuse-$(translate_arch "$arch")" zypper removerepo repo-openh264
-		chroot "${WORKDIR}/opensuse-$(translate_arch "$arch")" zypper dup --no-confirm
-		chroot "${WORKDIR}/opensuse-$(translate_arch "$arch")" rpm -qa --qf '%{NAME} ' | xargs -n 1 | grep -Pv '(filesystem|gpg-pubkey)' > /tmp/opensuse-pkgs.txt
-		cat /tmp/opensuse-pkgs.txt | xargs chroot "${WORKDIR}/opensuse-$(translate_arch "$arch")" zypper install --no-confirm --force
-		chroot "${WORKDIR}/opensuse-$(translate_arch "$arch")" zypper install --no-confirm util-linux
-		EOF
-		sudo rm -f /tmp/opensuse-pkgs.txt
+# Display neofetch with custom ASCII art
+neofetch --ascii_distro $NM
 
-		archive_rootfs "${ROOTFS_DIR}/opensuse-$(translate_arch "$arch")-pd-${CURRENT_VERSION}.tar.xz" \
-			"opensuse-$(translate_arch "$arch")"
-	done
-	unset opensuse_manifest
-}
+# Output the selected value
+echo "You selected $NM Linux"
+echo " "
 
-write_plugin() {
-	cat <<- EOF > "${PLUGIN_DIR}/opensuse.sh"
-	# This is a default distribution plug-in.
-	# Do not modify this file as your changes will be overwritten on next update.
-	# If you want customize installation, please make a copy.
-	DISTRO_NAME="OpenSUSE"
-	DISTRO_COMMENT="Rolling release (Tumbleweed)."
+# Create necessary directories
+mkdir -p $PREFIX/var/lib/proot-distro/installed-rootfs
 
-	TARBALL_URL['aarch64']="${GIT_RELEASE_URL}/opensuse-aarch64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['aarch64']="$(sha256sum "${ROOTFS_DIR}/opensuse-aarch64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['arm']="${GIT_RELEASE_URL}/opensuse-arm-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['arm']="$(sha256sum "${ROOTFS_DIR}/opensuse-arm-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['i686']="${GIT_RELEASE_URL}/opensuse-i686-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['i686']="$(sha256sum "${ROOTFS_DIR}/opensuse-i686-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
-	TARBALL_URL['x86_64']="${GIT_RELEASE_URL}/opensuse-x86_64-pd-${CURRENT_VERSION}.tar.xz"
-	TARBALL_SHA256['x86_64']="$(sha256sum "${ROOTFS_DIR}/opensuse-x86_64-pd-${CURRENT_VERSION}.tar.xz" | awk '{ print $1}')"
+# Change directory
+cd $PREFIX/var/lib/proot-distro/installed-rootfs/
 
-	distro_setup() {
-	${TAB}# Lock package filesystem to remove issues regarding zypper dup
-	${TAB}run_proot_cmd zypper al filesystem
-	}
-	EOF
-}
+# Download the rootfs using axel
+axel -a -o $FS.tar.xz https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz
+
+# Check file integrity
+echo " "
+echo "Checking $NM Linux File Integrity...!!!"
+echo " "
+sleep 3s
+echo "MD5"
+md5sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA256"
+sha256sum $FS.tar.xz
+sleep 3s
+echo " "
+echo "SHA512"
+sha512sum $FS.tar.xz
+sleep 3s
+
+# Extract the rootfs
+echo " "
+echo "[*] Extracting ${NM} Linux Rootfs, Please wait...!!!"
+proot --link2symlink bsdtar -xpJf $FS.tar.xz 2>/dev/null
+
+# Create a proot-distro configuration file for the Kali minimal rootfs
+cat > $PREFIX/etc/proot-distro/$FS.sh << EOF
+DISTRO_NAME="$NM Linux"
+TARBALL_URL['aarch64']="https://github.com/xiv3r/Termux-Pentesting-Distro/releases/download/rootfs/$FS.tar.xz"
+TARBALL_SHA256['aarch64']="$(sha256sum $FS.tar.xz | awk '{print $1}')"
+EOF
+
+# Create a shortcut command to launch the distro
+cat > $PREFIX/bin/$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro login $FS
+EOF
+chmod 700 $PREFIX/bin/$FS
+
+# Add start-up login notification
+cat >> $PREFIX/etc/bash.bashrc << EOF
+echo "Login $NM Linux: $FS"
+EOF
+
+# Add support for uninstallation
+cat > $PREFIX/bin/uninstall-$FS << EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+proot-distro remove $FS
+sed -i 's/echo "Login $NM Linux: $FS"//g' $PREFIX/etc/bash.bashrc
+rm -rf $PREFIX/bin/uninstall-$FS
+rm -rf $PREFIX/bin/$FS
+rm -rf $PREFIX/var/lib/proot-distro/dlcache/$FS.tar.xz
+EOF
+chmod 700 $PREFIX/bin/uninstall-$FS
+
+# Backup tarball to the cache
+mkdir -p $PREFIX/var/lib/proot-distro/dlcache
+mv $FS.tar.xz $PREFIX/var/lib/proot-distro/dlcache
+
+# Display final instructions
+echo " "
+echo -e '\e[1;96mSuccessful Installation!'
+echo -e '\e[0m'
+cat <<- EOF
+To login $NM Linux, Type: $FS
+EOF
+sleep 15s
+echo " "
