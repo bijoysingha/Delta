@@ -1,0 +1,45 @@
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temp files created by scripts
+*.tmp
+*.temp
+*.log
+*.bak
+
+# Termux specific
+storage/
+usr/
+home/
+.cache/
+.termux/
+
+# Rootfs and extracted OS directories
+*-arm64/
+*-x86_64/
+rootfs/
+chroot/
+downloads/
+local-builds/
+
+# Archives
+*.tar
+*.tar.gz
+*.tar.xz
+*.zip
+*.7z
+
+# QEMU disk images
+*.iso
+*.img
+*.vmdk
+*.vhd
+*.qcow2
+
+# Python cache (if you add Python helper scripts later)
+__pycache__/
+*.pyc
