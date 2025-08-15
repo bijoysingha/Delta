@@ -1,0 +1,12 @@
+# Force GitHub to detect repository language as Shell
+*.sh linguist-language=Shell
+*.bash linguist-language=Shell
+
+# Normalize line endings for shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Treat these files as text
+*.md text
+LICENSE text
+README.md text
