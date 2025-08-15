@@ -24,7 +24,7 @@
  16. Windows 11
 
 # Requirements 
-<p>Termux (from F-Droid)</p>
+<p>Termux (from F-Droid or playstore)</p>
 <p>Powerfull android phone or iphone</p>
 <p>better Internet connection</p>
 
@@ -51,8 +51,21 @@ Free distribution by me;
 # End of README.md
 
 # Important 
-• And also this is a project for education and non-commercial uses only
+• And also this is a project for education and non-commercial uses only.
 
-• This tool License is GPL V3 so use it safely
+• This tool License is GPL V3 so use it safely.
 
 • If any type of update will come the tool will itself update it.
+
+# Error information 
+In playstore termux number 6 Debain error is coming but all options leaving number 6 option are working.
+
+# Error output in Termux (playstore)
+curl: (22) The requested URL returned error: 404
+[-] Failed to download debian.sh. Check your internet or URL.
+
+# Tool release 
+This tool is made in India according to Indian copyright act no.14 1957 you cannot copy my tool without permission. 
+
+# Issues 
+If any issues leaving issues discussed in # Error information ; then comment me to improve my tool.
