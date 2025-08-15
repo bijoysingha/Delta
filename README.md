@@ -28,7 +28,7 @@
 <p>Powerfull android phone or iphone</p>
 <p>better Internet connection</p>
 
-# Download
+# Commands for Termux for downloading my tool
 • pkg install git
 
 • git clone https://github.com/bijoysingha/Delta.git
