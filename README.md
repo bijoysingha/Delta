@@ -52,3 +52,7 @@ Free distribution by me;
 
 # Important 
 • And also this is a project for education and non-commercial uses only
+
+• This tool License is GPL V3 so use it safely
+
+• If any type of update will come the tool will itself update it.
