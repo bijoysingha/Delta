@@ -5,7 +5,7 @@
 ![GitHub stars](https://img.shields.io/github/stars/bijoysingha/Delta?style=social)
 ** It is a tool that helps you download listed packages **
 
-# packages 
+# Packages 
  1. Adélie Linux
   2. Alpine Linux
   3. Arch Linux
