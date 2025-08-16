@@ -3,6 +3,7 @@
 ![Shell](https://img.shields.io/badge/language-shell-green)
 ![GitHub repo size](https://img.shields.io/github/repo-size/bijoysingha/Delta)
 ![GitHub stars](https://img.shields.io/github/stars/bijoysingha/Delta?style=social)
+
 ** It is a tool that helps you download listed packages **
 
 # Packages 
